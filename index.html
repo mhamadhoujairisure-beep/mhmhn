@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ledger System - Hma Group</title>
+    <!-- استيراد مكتبة html2pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --dr-color: #10b981; 
+            --cr-color: #ef4444; 
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Cairo', sans-serif; background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; }
+
+        /* Header */
+        header { background-color: var(--card-bg); padding: 1rem 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        header h1 { color: var(--primary-color); font-weight: 700; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; }
+        
+        /* أزرار الرأس */
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn { padding: 0.6rem 1.2rem; border-radius: 8px; border: none; cursor: pointer; font-family: 'Cairo', sans-serif; font-weight: 600; transition: 0.2s; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        
+        .btn-back { background-color: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); display: none; }
+        .btn-back:hover { background-color: #e5e7eb; }
+        .btn-back.active { display: inline-flex; }
+
+        .btn-export { background-color: #0f172a; color: white; display: none; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); }
+        .btn-export:hover { background-color: #334155; transform: translateY(-1px); }
+        .btn-export.active { display: inline-flex; }
+
+        /* Main Layout */
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem 2rem; display: grid; grid-template-columns: 350px 1fr; gap: 2rem; }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+
+        /* Cards */
+        .card { background-color: var(--card-bg); border-radius: 16px; padding: 1.5rem; box-shadow: var(--shadow); height: fit-content; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1.2rem; margin-bottom: 1.2rem; border-bottom: 2px solid var(--bg-color); padding-bottom: 0.75rem; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; }
+
+        /* Form Elements */
+        .form-group { margin-bottom: 1.2rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-secondary); font-size: 0.9rem; }
+        input, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Cairo', sans-serif; font-size: 1rem; transition: 0.2s; background: #fff; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        button.btn-primary { width: 100%; padding: 0.8rem; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: 0.2s; font-family: 'Cairo', sans-serif; }
+        button.btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        /* Search Input Style */
+        .search-container { margin-bottom: 1rem; position: relative; }
+        .search-input {
+            width: 100%; padding: 0.8rem 1rem 0.8rem 2.5rem;
+            border: 1px solid var(--border-color); border-radius: 8px;
+            font-family: 'Cairo', sans-serif; font-size: 1rem; transition: 0.2s;
+        }
+        .search-input:focus { border-color: var(--primary-color); outline: none; }
+        .search-icon {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            color: var(--text-secondary); pointer-events: none;
+        }
+
+        /* Views Management */
+        .view-section { display: none; }
+        .view-section.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-secondary); background: #f9fafb; border-radius: 12px; border: 2px dashed #e5e7eb; font-size: 1.1rem; }
+
+        /* Toast */
+        #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: #1f2937; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-size: 0.9rem; display: flex; align-items: center; gap: 8px; border-right: 4px solid var(--primary-color); animation: slideIn 0.3s ease-out; font-family: 'Cairo', sans-serif; }
+        .toast.error { border-right-color: var(--cr-color); }
+        @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* --- CLIENTS TABLE STYLE --- */
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; border: 1px solid var(--border-color); }
+        #clientsTable { width: 100%; border-collapse: collapse; min-width: 600px; font-family: 'Cairo', sans-serif; }
+        #clientsTable th, #clientsTable td { padding: 1rem; text-align: right; border-bottom: 1px solid var(--border-color); white-space: normal; vertical-align: middle; }
+        #clientsTable th { background-color: #f8fafc; color: var(--text-secondary); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+        .col-code { width: 15%; font-family: 'Roboto Mono', monospace; color: var(--text-secondary); }
+        .col-name { width: 45%; font-weight: bold; color: var(--text-main); }
+        .col-balance { width: 20%; text-align: center; font-weight: 600; }
+        .col-action { width: 20%; text-align: center; }
+
+        /* --- LEDGER STYLE (Arabic & RTL) --- */
+        .ledger-container {
+            direction: rtl;
+            border: 1px solid #333;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px; 
+            color: #000; 
+            font-family: 'Cairo', sans-serif; 
+            text-align: right;
+        }
+        .ledger-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+        .ledger-header h2 { font-size: 2rem; margin-bottom: 5px; border: none; color: #000; font-weight: 800; font-family: 'Cairo', sans-serif; }
+        .ledger-header h3 { font-size: 1.3rem; color: #333; margin: 10px 0; font-weight: 700; }
+        .ledger-header p { color: #555; font-size: 0.95rem; margin: 5px 0; font-family: 'Cairo', sans-serif; }
+
+        .ledger-table { width: 100%; border-collapse: collapse; font-family: 'Cairo', sans-serif; font-size: 0.95rem; }
+        .ledger-table th, .ledger-table td { border: 1px solid #000; padding: 12px 15px; text-align: right; vertical-align: middle; }
+        .ledger-table th { background-color: #f8f9fa; font-weight: 800; color: #000; text-transform: uppercase; font-size: 0.9rem; text-align: center; }
+        
+        .text-dr { color: var(--dr-color) !important; font-weight: bold; } 
+        .text-cr { color: var(--cr-color) !important; font-weight: bold; } 
+        .text-neutral { color: #000 !important; } 
+
+        .col-date { width: 130px; min-width: 130px; text-align: center; white-space: nowrap; font-family: 'Roboto Mono', monospace; }
+        .col-particulars { width: 40%; }
+        .col-dr { width: 16%; text-align: center; } 
+        .col-cr { width: 16%; text-align: center; } 
+        .col-balance { width: 16%; text-align: center; font-weight: bold; } 
+
+        .total-row td { background-color: #f1f5f9 !important; font-weight: bold; border-top: 2px solid #000; font-size: 1rem; }
+        .closing-balance-row td { background-color: #eef2ff !important; font-weight: bold; border-top: 2px double #000; font-size: 1rem; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Hma System</h1>
+        <div class="header-actions">
+            <button id="exportBtn" class="btn btn-export" onclick="downloadPDFDirect()">
+                PDF
+            </button>
+            <button id="backToDashboardBtn" class="btn btn-back" onclick="showDashboard()">↩</button>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <!-- الشريط الجانبي -->
+        <aside>
+            <div id="addClientView" class="card view-section active">
+                <h2> اضافة زبون</h2>
+                <form id="clientForm">
+                    <div class="form-group">
+                        <label> اسم الزبون</label>
+                        <input type="text" id="clientName" placeholder="الاسم بالكامل" required autocomplete="off">
+                    </div>
+                    <button type="submit" class="btn-primary" id="addClientBtn">اضافة</button>
+                </form>
+            </div>
+
+            <div id="addTransactionView" class="card view-section">
+                <h2>فاتورة جديدة</h2>
+                <form id="transactionForm">
+                    <div class="form-group">
+                        <label>نوع</label>
+                        <select id="transType">
+                            <option value="debit">شراء</option>
+                            <option value="credit">دفع</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>السعر ($)</label>
+                        <input type="number" id="transAmount" placeholder="0.00" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>المنتج/الخدمة</label>
+                        <input type="text" id="transDesc" placeholder="" required>
+                    </div>
+                    <button type="submit" class="btn-primary" id="addTransBtn">حفظ</button>
+                </form>
+            </div>
+        </aside>
+
+
+        <!-- المحتوى الرئيسي -->
+        <main>
+            <div id="dashboardView" class="card view-section active">
+                <h2>
+                    الزبائن
+                    <span style="font-size:0.8rem; font-weight:400; color:#666" id="totalCount"></span>
+                </h2>
+                
+                <!-- حقل البحث -->
+                <div class="search-container">
+                    <span class="search-icon"></span>
+                    <input type="text" id="searchInput" class="search-input" placeholder="بحث بالاسم أو الكود..." oninput="handleSearch()">
+                </div>
+
+                <div class="table-responsive">
+                    <table id="clientsTable">
+                        <thead>
+                            <tr>
+                                <th class="col-code">Code</th>
+                                <th class="col-name">Name</th>
+                                <th class="col-balance">Balance</th>
+                                <th class="col-action">Open</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clientsTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="emptyState" class="empty-state">جاري التحميل...</div>
+            </div>
+
+            <div id="clientLedgerView" class="card view-section">
+                <div id="invoiceElement" class="ledger-container">
+                    <div class="ledger-header">
+                        <h2>Hma Group</h2>
+                        <h3 id="ledgerClientName">اسم الزبون</h3>
+                        <p id="ledgerPeriodInfo">الفترة: <span id="currentMonth"></span> | تاريخ الإصدار: <span id="generatedDate"></span></p>
+                    </div>
+                    
+                    <table class="ledger-table">
+                        <thead>
+                            <tr>
+                                <th class="col-date">التاريخ</th>
+                                <th class="col-particulars">البيان</th>
+                                <th class="col-dr">شراء</th>
+                                <th class="col-cr">دفع</th>
+                                <th class="col-balance">الرصيد</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // ==========================================
+        // إعدادات Supabase
+        // ==========================================
+        const supabaseUrl = "https://xjtsvrgciublkvbqdokd.supabase.co";
+        const supabaseKey = "sb_publishable_ubxAmKiMxc7bBeUQF9uY5g_c-D3p_Zy";
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // ==========================================
+        // إدارة الحالة والبيانات
+        // ==========================================
+        let clients = []; 
+        let currentClientId = null;
+        let currentClientName = ""; 
+
+        // 1. تحميل البيانات عند بدء التشغيل
+        window.addEventListener('load', fetchClients);
+
+        async function fetchClients() {
+            const { data, error } = await supabase
+                .from('clients')
+                .select('*')
+                .order('id', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching clients:', error);
+                showToast('خطأ في تحميل البيانات من السيرفر', true);
+                document.getElementById('emptyState').textContent = 'فشل الاتصال بقاعدة البيانات';
+            } else {
+                clients = data || [];
+                renderClientsList();
+            }
+        }
+
+        // 2. إضافة عميل جديد إلى Supabase
+        async function addClientToDB(name) {
+            // تحديد الكود التالي
+            let nextCode = 1001;
+            if (clients.length > 0) {
+                const maxCodeClient = clients.reduce((max, client) => {
+                    const c = parseInt(client.code);
+                    return c > max ? c : max;
+                }, 0);
+                nextCode = maxCodeClient + 1;
+            }
+
+            const newClientData = {
+                name: name,
+                code: nextCode.toString(),
+                transactions: [] 
+            };
+
+            const { data, error } = await supabase
+                .from('clients')
+                .insert([newClientData])
+                .select()
+                .single(); // نأخذ البيانات المرجعة مباشرة
+
+            if (error) {
+                console.error('Error adding client:', error);
+                showToast('فشل الإضافة: ' + error.message, true);
+                return null;
+            } else {
+                clients.push(data); // تحديث المصفوفة المحلية
+                renderClientsList();
+                return data;
+            }
+        }
+
+        // 3. إضافة عملية وتحديث العميل في Supabase
+        async function addTransactionToDB(clientId, transactionObj) {
+            const clientIndex = clients.findIndex(c => c.id === clientId);
+            if (clientIndex === -1) return;
+
+            const currentTrans = clients[clientIndex].transactions || [];
+            const updatedTrans = [...currentTrans, transactionObj];
+
+            const { error } = await supabase
+                .from('clients')
+                .update({ transactions: updatedTrans })
+                .eq('id', clientId);
+
+            if (error) {
+                console.error('Error updating transaction:', error);
+                showToast('فشل حفظ العملية', true);
+            } else {
+                // تحديث المصفوفة المحلية فقط إذا نجح التحديث في السيرفر
+                clients[clientIndex].transactions = updatedTrans;
+                showToast('تم حفظ العملية');
+            }
+        }
+
+        // ==========================================
+        // واجهة المستخدم والمنطق
+        // ==========================================
+
+        const views = {
+            addClient: document.getElementById('addClientView'),
+            addTrans: document.getElementById('addTransactionView'),
+            dashboard: document.getElementById('dashboardView'),
+            ledger: document.getElementById('clientLedgerView')
+        };
+        const backBtn = document.getElementById('backToDashboardBtn');
+        const exportBtn = document.getElementById('exportBtn');
+
+        function switchView(viewName) {
+            Object.values(views).forEach(el => el.classList.remove('active'));
+            
+            if (viewName === 'dashboard') {
+                views.addClient.classList.add('active');
+                views.dashboard.classList.add('active');
+                backBtn.classList.remove('active'); 
+                exportBtn.classList.remove('active'); 
+                currentClientId = null;
+            } else if (viewName === 'ledger') {
+                views.addTrans.classList.add('active');
+                views.ledger.classList.add('active');
+                backBtn.classList.add('active'); 
+                exportBtn.classList.add('active'); 
+            }
+        }
+
+        function showDashboard() {
+            switchView('dashboard');
+            fetchClients(); // إعادة تحميل البيانات عند العودة للقائمة
+        }
+
+        function calcBalance(transactions) {
+            if (!transactions) return 0;
+            return transactions.reduce((acc, t) => {
+                return t.type === 'debit' ? acc - parseFloat(t.amount) : acc + parseFloat(t.amount);
+            }, 0);
+        }
+
+        function renderClientsList(filterText = '') {
+            const tbody = document.getElementById('clientsTableBody');
+            const empty = document.getElementById('emptyState');
+            const container = document.querySelector('.table-responsive');
+            
+            tbody.innerHTML = '';
+            
+            const filteredClients = clients.filter(client => {
+                const searchStr = filterText.toLowerCase();
+                return client.name.toLowerCase().includes(searchStr) || 
+                       client.code.toString().includes(searchStr);
+            });
+
+            document.getElementById('totalCount').textContent = `(${filteredClients.length})`;
+
+            if (filteredClients.length === 0) {
+                container.style.display = 'none';
+                empty.style.display = 'block';
+                empty.textContent = filterText ? 'لا توجد نتائج مطابقة' : 'لا يوجد عملاء حالياً';
+            } else {
+                container.style.display = 'block';
+                empty.style.display = 'none';
+
+                filteredClients.forEach(client => {
+                    const balance = calcBalance(client.transactions);
+                    const balClass = balance > 0 ? 'balance-positive' : (balance < 0 ? 'balance-negative' : '');
+                    const balText = balance === 0 ? '0' : (balance > 0 ? `+${balance}` : `${balance}`);
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="col-code">#${client.code}</td>
+                        <td class="col-name">${client.name}</td>
+                        <td class="col-balance ${balClass}">${balText}</td>
+                        <td class="col-action"><button onclick="openLedger(${client.id})" style="background:var(--primary-color); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:0.85rem;">عرض</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function handleSearch() {
+            const searchValue = document.getElementById('searchInput').value;
+            renderClientsList(searchValue);
+        }
+
+        // نموذج إضافة عميل
+        document.getElementById('clientForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('addClientBtn');
+            const nameInput = document.getElementById('clientName');
+            const name = nameInput.value.trim();
+
+            const nameExists = clients.some(c => c.name.toLowerCase() === name.toLowerCase());
+            if (nameExists) {
+                showToast(`الاسم "${name}" موجود مسبقاً!`, true);
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'جاري الحفظ...';
+
+            const newClient = await addClientToDB(name);
+            
+            btn.disabled = false;
+            btn.textContent = 'اضافة';
+
+            if (newClient) {
+                nameInput.value = '';
+                openLedger(newClient.id);
+                showToast(`تم الإضافة بنجاح، الكود: #${newClient.code}`);
+            }
+        });
+
+        // فتح سجل العميل
+        function openLedger(id) {
+            currentClientId = id;
+            const client = clients.find(c => c.id === id);
+            if (!client) return;
+            
+            currentClientName = client.name;
+            document.getElementById('ledgerClientName').textContent = client.name;
+            
+            const now = new Date();
+            const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+            document.getElementById('currentMonth').textContent = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+            
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+            document.getElementById('generatedDate').textContent = `${day}-${month}-${year}`;
+
+            renderLedgerReport(client);
+            switchView('ledger');
+        }
+
+        // عرض السجل
+        function renderLedgerReport(client) {
+            const tbody = document.getElementById('ledgerTableBody');
+            tbody.innerHTML = '';
+            
+            let totalDr = 0;
+            let totalCr = 0;
+            let runningBalance = 0;
+            const transactions = client.transactions || [];
+
+            const sortedTrans = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            sortedTrans.forEach(t => {
+                const dateObj = new Date(t.date);
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const year = dateObj.getFullYear();
+                const dateStr = `${day}-${month}-${year}`;
+
+                let particulars = '';
+                let drVal = '';
+                let crVal = '';
+
+                if (t.type === 'debit') {
+                    particulars = `شراء - (${t.desc})`;
+                    drVal = `$${t.amount.toFixed(2)}`;
+                    totalDr += t.amount;
+                    runningBalance -= t.amount;
+                } else {
+                    particulars = `دفع - (${t.desc})`;
+                    crVal = `$${t.amount.toFixed(2)}`;
+                    totalCr += t.amount;
+                    runningBalance += t.amount;
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="col-date">${dateStr}</td>
+                    <td class="col-particulars">${particulars}</td>
+                    <td class="col-dr text-dr">${drVal}</td>
+                    <td class="col-cr text-cr">${crVal}</td>
+                    <td class="col-balance">${formatBalance(runningBalance)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // صف الإجمالي
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'total-row';
+            totalRow.innerHTML = `
+                <td colspan="2" style="text-align:center">الإجمالي</td>
+                <td class="col-dr text-dr">$${totalDr.toFixed(2)}</td>
+                <td class="col-cr text-cr">$${totalCr.toFixed(2)}</td>
+                <td></td>
+            `;
+            tbody.appendChild(totalRow);
+
+            // صف الرصيد الختامي
+            const closingRow = document.createElement('tr');
+            closingRow.className = 'closing-balance-row';
+            const today = new Date();
+            const tDay = String(today.getDate()).padStart(2, '0');
+            const tMonth = String(today.getMonth() + 1).padStart(2, '0');
+            const tYear = today.getFullYear();
+            
+            closingRow.innerHTML = `
+                <td class="col-date">${tDay}-${tMonth}-${tYear}</td>
+                <td>الرصيد النهائي</td>
+                <td></td>
+                <td></td>
+                <td class="col-balance">${formatBalance(runningBalance)}</td>
+            `;
+            tbody.appendChild(closingRow);
+        }
+
+        function formatBalance(amount) {
+            const absAmount = `$${Math.abs(amount).toFixed(2)}`; 
+            let colorClass = '';
+            if (amount < 0) { colorClass = 'text-dr'; } 
+            else if (amount > 0) { colorClass = 'text-cr'; } 
+            else { colorClass = 'text-neutral'; }
+            return `<span class="${colorClass}">${absAmount}</span>`;
+        }
+
+        // نموذج إضافة عملية
+        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentClientId) return;
+
+            const btn = document.getElementById('addTransBtn');
+            const amount = parseFloat(document.getElementById('transAmount').value);
+            
+            btn.disabled = true;
+            btn.textContent = 'جاري الحفظ...';
+
+            const newTrans = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                type: document.getElementById('transType').value,
+                amount: amount,
+                desc: document.getElementById('transDesc').value
+            };
+
+            await addTransactionToDB(currentClientId, newTrans);
+            
+            btn.disabled = false;
+            btn.textContent = 'حفظ';
+            
+            // تحديث العرض فوراً
+            const client = clients.find(c => c.id === currentClientId);
+            renderLedgerReport(client);
+            e.target.reset();
+            document.getElementById('transDesc').focus();
+        });
+
+        // دالة التصدير
+        function downloadPDFDirect() {
+            if(!currentClientName) return;
+            const element = document.getElementById('invoiceElement');
+            const safeName = currentClientName.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, "_"); 
+            
+            const opt = {
+                margin:       0.5,
+                filename:     `Invoice_${safeName}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true }, 
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            showToast('جاري إنشاء ملف PDF...');
+            html2pdf().set(opt).from(element).save().then(() => {
+                showToast('تم تحميل ملف PDF بنجاح');
+            }).catch(err => {
+                console.error(err);
+                showToast('خطأ في التحميل');
+            });
+        }
+
+        function showToast(msg, isError = false) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = isError ? 'toast error' : 'toast';
+            const icon = isError ? '⚠️' : '✅';
+            toast.innerHTML = `${icon} ${msg}`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+    </script>
+</body>
+</html>
